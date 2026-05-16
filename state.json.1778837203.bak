@@ -1,0 +1,36 @@
+{
+  "wlan0": {"ip": "192.168.0.5", "subnet": "192.168.0.0/24", "gw": "192.168.0.1"},
+  "eth0":  {"ip": "192.168.203.146",  "subnet": "192.168.203.0/24",  "gw": "192.168.203.2"},
+  "guard_chain": "DUAL_NIC_GUARD",
+  "resolv_backup": "/etc/resolv.conf.dual-nic-bak",
+  "vpn_pinned": ["100.74.96.61"],
+  "nm_eth0_con": "Wired connection 1",
+  "nm_wlan0_con": "ishfgknwegwaefguwefgwgnwug@unifi",
+  "nm_eth0": {
+    "never_default": "no",
+    "ipv6_never_default": "no",
+    "ignore_auto_dns": "no",
+    "ipv6_ignore_auto_dns": "no",
+    "dns": "",
+    "route_metric": "-1"
+  },
+  "nm_wlan0": {
+    "never_default": "no",
+    "ipv6_never_default": "no",
+    "route_metric": "-1",
+    "ipv6_route_metric": "-1",
+    "dns": "",
+    "ignore_auto_dns": "no"
+  },
+  "original_routes": [
+    "default via 192.168.203.2 dev eth0 metric 100 ",
+    "default via 192.168.203.2 dev eth0 proto dhcp src 192.168.203.146 metric 100 ",
+    "default via 192.168.0.1 dev wlan0 metric 600 ",
+    "default via 192.168.0.1 dev wlan0 proto dhcp src 192.168.0.5 metric 600 ",
+    "10.80.0.0/16 dev team-b scope link ",
+    "172.17.0.0/16 dev docker0 proto kernel scope link src 172.17.0.1 linkdown ",
+    "192.168.0.0/24 dev wlan0 proto kernel scope link src 192.168.0.5 metric 600 ",
+    "192.168.203.0/24 dev eth0 proto kernel scope link src 192.168.203.146 metric 100 "
+  ],
+  "switched_at": "2026-05-15T05:26:33-04:00"
+}
