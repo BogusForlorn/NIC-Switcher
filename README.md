@@ -1,11 +1,10 @@
-# dual-NIC
+# NIC-Switcher/Dual-NIC solution
 
-Airtight traffic isolation for on-site pentesting with AI/LLM tools.
+Airtight traffic isolation. Useful for when the organisation requires pentest, but their local network disables certain domains (or you want to divert traffic to another NIC). 
 
-Two NICs, two purposes: **eth0** connects to the corp/target intranet (where
-AI traffic must be invisible), **wlan0** (USB WiFi → phone hotspot) carries
-all internet/Copilot/LLM traffic. A network sniffer on the corp side will
-never see a DNS query or TLS handshake to any AI provider.
+Ensure that you have 2 NICs (1 internal wifi-card attached to your laptop for eth0 if via VMware, 1 external NIC). If your external NIC has a chipset (like Alfa NICs), ensure you have the drivers installed.
+Your laptop's host will connect to the org's network while the NIC (directly bridged to the VM) will connect to any public-reachable network. 
+`eth0` connects to the organisation's intranet. Everything else is routed through `wlan0`. Port sniffers will never ever see a single DNS request that is supposedly blocked.
 
 ## Network Topology
 
@@ -29,22 +28,16 @@ never see a DNS query or TLS handshake to any AI provider.
 └──────────────────────────────────────────────────────────────────┘
 ```
 
-## Game-Day Flow
+## How to use
 
-This is the step-by-step procedure for on-site engagements.
+Step-by-step procedure for on-site engagements:
 
 ### Step 1: Boot & Connect Networks
-
-```bash
-# eth0 should auto-connect to corp network via VMware NAT
-# Plug in USB WiFi, connect to phone hotspot
-# Tailscale daemon starts on boot (tailscaled.service)
-```
+NICs should connect to respective networks beforehand (`eth0` to org, `wlan0` to internet)
 
 ### Step 2: Activate Isolation
 
-**Close all AI/Copilot tools first** — pre-existing TCP connections will
-leave residual inbound retransmits visible on eth0 until they time out.
+**Close all blocked tools first**. Pre-existing TCP connections will leave residual inbound retransmits visible on eth0 until they time out.
 
 ```bash
 cd /home/kali/dual-NIC
@@ -57,7 +50,7 @@ switch.sh will:
 - Block all DNS on eth0
 - Tailscale reconnects automatically via wlan0
 
-### Step 3: Verify
+### Step 3 (optional): Verify
 
 ```bash
 # Tailscale (remote server via wlan0)
@@ -75,13 +68,7 @@ ip route get 192.168.203.1        # → dev eth0 ✓
 sudo iptables -vnL DUAL_NIC_GUARD
 ```
 
-### Step 4: Start AI Tools
-
-```bash
-copilot
-# or: agent, solve3, solve4, etc.
-# Multiple concurrent sessions work fine
-```
+### Step 4: Start AI Tools and reach other blocked tools.
 
 ### Step 5: Connect Org VPN (when you receive the .ovpn config)
 
