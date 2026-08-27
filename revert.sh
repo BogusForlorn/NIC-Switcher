@@ -6,6 +6,7 @@ set -euo pipefail
 
 DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 STATE="$DIR/state.json"
+MANUAL_STATE="$DIR/manual-routes.tsv"
 MARK="dual-nic-switch"
 
 red()   { printf '\033[31m%s\033[0m\n' "$*" >&2; }
@@ -21,6 +22,18 @@ ETH_GW=$(python3 -c "import json; print(json.load(open('$STATE'))['eth0']['gw'])
 WLAN_GW=$(python3 -c "import json; print(json.load(open('$STATE'))['wlan0']['gw'])")
 VPN_PINNED=$(python3 -c "import json; d=json.load(open('$STATE')); print(' '.join(d.get('vpn_pinned',[])))" 2>/dev/null || true)
 info "captured: eth0_gw=$ETH_GW wlan0_gw=$WLAN_GW vpn_pinned=$VPN_PINNED"
+
+# Remove routes and /etc/hosts entries created by manual.sh. Route additions use
+# `ip route add`, so these entries can never represent overwritten prior routes.
+if [[ -f "$MANUAL_STATE" ]]; then
+  info "removing manual routes..."
+  while IFS=$'\t' read -r destination iface gateway hostname; do
+    [[ -n "$destination" && -n "$iface" && -n "$gateway" ]] || continue
+    sudo ip route del "$destination" via "$gateway" dev "$iface" 2>/dev/null || true
+  done < "$MANUAL_STATE"
+  sudo sed -i '/# dual-nic-manual$/d' /etc/hosts
+  rm -f "$MANUAL_STATE"
+fi
 
 # 1. Remove iptables/ip6tables guard chain
 info "removing eth0 egress lockdown..."

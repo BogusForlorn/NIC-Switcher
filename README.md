@@ -70,6 +70,28 @@ sudo iptables -vnL DUAL_NIC_GUARD
 
 ### Step 4: Start AI Tools and reach other blocked tools.
 
+### Add Remote Internal Routes Manually
+
+For an internal IP or subnet that is not directly attached to `eth0`, add a
+temporary route after `switch.sh` is active:
+
+```bash
+# One server, including an optional local hostname mapping
+sudo ./manual.sh --destination 10.1.115.184 --interface eth0 \
+  --hostname subdomain.xyz.com
+
+# A complete internal subnet
+sudo ./manual.sh --destination 10.1.115.0/24 --interface eth0
+
+# Override gateway auto-detection when necessary
+sudo ./manual.sh -d 10.20.0.0/16 -i eth0 -g 192.168.203.2
+```
+
+The command adds the route, inserts an allowance before the guard's catch-all
+REJECT rule, and records the change in `manual-routes.tsv`. Hostname mappings
+are accepted only for a single IP (`/32`). `revert.sh` removes all recorded
+routes and tagged `/etc/hosts` entries automatically.
+
 ### Step 5: Connect Org VPN (when you receive the .ovpn config)
 
 ```bash
@@ -376,6 +398,7 @@ tailscale status              # → connected
 | File              | Purpose                                              |
 |-------------------|------------------------------------------------------|
 | `switch.sh`       | Activates dual-NIC isolation                         |
+| `manual.sh`       | Adds temporary host/subnet routes and hostnames      |
 | `revert.sh`       | Reverts to normal networking                         |
 | `vpn-connect.sh`  | Safe OpenVPN wrapper (connect/disconnect)             |
 | `test-switch.sh`  | Automated test: switch → capture → verify → revert   |
