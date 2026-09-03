@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
-# Add a temporary IPv4 host/subnet route during a dual-NIC session.
-# Changes are recorded for revert.sh to remove.
+# Add or remove a temporary IPv4 host/subnet route. It works both during a
+# switch.sh session and standalone when the public NIC already owns default.
 set -euo pipefail
 
 DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
@@ -12,6 +12,7 @@ usage() {
   cat <<'EOF'
 Usage:
   sudo ./manual.sh --destination IP[/PREFIX] --interface IFACE [options]
+  sudo ./manual.sh --delete --destination IP[/PREFIX] --interface IFACE [options]
 
 Required:
   -d, --destination IP[/PREFIX]  IPv4 host or subnet to route
@@ -20,12 +21,14 @@ Required:
 Options:
   -g, --gateway IP              Next-hop gateway (auto-detected if omitted)
   -H, --hostname NAME           Add IP NAME to /etc/hosts (host IP only)
+  -D, --delete                  Remove the exact route (and hostname mapping)
   -h, --help                    Show this help
 
 Examples:
   sudo ./manual.sh -d 10.1.115.184 -i eth0 -H subdomain.xyz.com
   sudo ./manual.sh -d 10.1.115.0/24 -i eth0
   sudo ./manual.sh -d 172.20.0.0/16 -i eth0 -g 192.168.203.2
+  sudo ./manual.sh -D -d 172.20.0.0/16 -i eth0 -g 192.168.203.2
 EOF
 }
 
@@ -33,6 +36,7 @@ DEST=""
 IFACE=""
 GATEWAY=""
 HOSTNAME=""
+DELETE=false
 
 while [[ $# -gt 0 ]]; do
   case "$1" in
@@ -40,13 +44,13 @@ while [[ $# -gt 0 ]]; do
     -i|--interface)   [[ $# -ge 2 ]] || { usage >&2; exit 2; }; IFACE="$2"; shift 2 ;;
     -g|--gateway)     [[ $# -ge 2 ]] || { usage >&2; exit 2; }; GATEWAY="$2"; shift 2 ;;
     -H|--hostname)    [[ $# -ge 2 ]] || { usage >&2; exit 2; }; HOSTNAME="$2"; shift 2 ;;
+    -D|--delete) DELETE=true; shift ;;
     -h|--help) usage; exit 0 ;;
     *) printf 'Unknown option: %s\n' "$1" >&2; usage >&2; exit 2 ;;
   esac
 done
 
 [[ $EUID -eq 0 ]] || { printf 'Run this command with sudo.\n' >&2; exit 1; }
-[[ -f "$STATE" ]] || { printf 'switch.sh is not active (state.json missing).\n' >&2; exit 1; }
 [[ -n "$DEST" && -n "$IFACE" ]] || { usage >&2; exit 2; }
 [[ "$IFACE" =~ ^[[:alnum:]_.:-]+$ ]] || { printf 'Invalid interface name.\n' >&2; exit 2; }
 ip link show dev "$IFACE" &>/dev/null || { printf 'Interface not found: %s\n' "$IFACE" >&2; exit 1; }
@@ -85,13 +89,15 @@ except ValueError as exc:
 PY
 else
   # Prefer the gateway captured by switch.sh for its known interfaces.
-  GATEWAY=$(python3 - "$STATE" "$IFACE" <<'PY'
+  if [[ -f "$STATE" ]]; then
+    GATEWAY=$(python3 - "$STATE" "$IFACE" <<'PY'
 import json, sys
 with open(sys.argv[1], encoding="utf-8") as fh:
     data = json.load(fh)
 print(data.get(sys.argv[2], {}).get("gw", ""))
 PY
-  )
+    )
+  fi
   if [[ -z "$GATEWAY" ]]; then
     GATEWAY=$(ip -4 route show default dev "$IFACE" | awk '/default/ {print $3; exit}')
   fi
@@ -101,6 +107,26 @@ fi
   printf 'No gateway found for %s; provide one with --gateway.\n' "$IFACE" >&2
   exit 1
 }
+
+if $DELETE; then
+  ip route del "$DEST" via "$GATEWAY" dev "$IFACE"
+  if [[ -n "$HOSTNAME" ]]; then
+    sed -i "/[[:space:]]# ${MARK}$/ { /^[[:space:]]*${HOST_IP//./\\.}[[:space:]]/d; }" /etc/hosts
+  fi
+  if [[ -f "$MANUAL_STATE" ]]; then
+    TMP_STATE=$(mktemp "${MANUAL_STATE}.XXXXXX")
+    awk -F '\t' -v d="$DEST" -v i="$IFACE" -v g="$GATEWAY" \
+      '!( $1 == d && $2 == i && $3 == g )' "$MANUAL_STATE" > "$TMP_STATE"
+    if [[ -s "$TMP_STATE" ]]; then
+      chmod 600 "$TMP_STATE"
+      mv "$TMP_STATE" "$MANUAL_STATE"
+    else
+      rm -f "$TMP_STATE" "$MANUAL_STATE"
+    fi
+  fi
+  printf 'Removed: %s via %s dev %s\n' "$DEST" "$GATEWAY" "$IFACE"
+  exit 0
+fi
 
 # Deliberately use "add", not "replace": never overwrite a pre-existing route.
 ip route add "$DEST" via "$GATEWAY" dev "$IFACE"

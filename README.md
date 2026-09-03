@@ -87,10 +87,24 @@ sudo ./manual.sh --destination 10.1.115.0/24 --interface eth0
 sudo ./manual.sh -d 10.20.0.0/16 -i eth0 -g 192.168.203.2
 ```
 
+`manual.sh` can also be used without `switch.sh` when the public interface
+already owns the preferred default route. For example, with `wlan0` internal
+and `wlan1` public:
+
+```bash
+sudo ./manual.sh -d 172.31.181.168 -i wlan0
+ip route get 172.31.181.168   # must show dev wlan0
+ip route get 1.1.1.1          # must show dev wlan1
+
+# Remove the standalone route later:
+sudo ./manual.sh --delete -d 172.31.181.168 -i wlan0
+```
+
 The command adds the route, inserts an allowance before the guard's catch-all
 REJECT rule, and records the change in `manual-routes.tsv`. Hostname mappings
 are accepted only for a single IP (`/32`). `revert.sh` removes all recorded
-routes and tagged `/etc/hosts` entries automatically.
+routes and tagged `/etc/hosts` entries automatically during a `switch.sh`
+session; use `manual.sh --delete` for a standalone route.
 
 ### Step 5: Connect Org VPN (when you receive the .ovpn config)
 
