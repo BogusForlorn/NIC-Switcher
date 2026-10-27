@@ -112,6 +112,13 @@ if command -v resolvectl &>/dev/null && systemctl is-active systemd-resolved &>/
   sudo resolvectl revert wlan0 2>/dev/null || true
 fi
 
+# 1b-extra. Reactivate NetworkManager connection to restore DNS
+if [[ -n "${ETH0_CON:-}" ]]; then
+  info "reactivating eth0 to restore DNS via NetworkManager..."
+  sudo nmcli con down "$ETH0_CON"
+  sudo nmcli con up "$ETH0_CON"
+fi
+
 # 1c. Remove pinned VPN endpoint routes (no longer needed once default is back)
 for vpn_ep in $VPN_PINNED; do
   sudo ip route del "$vpn_ep/32" via "$ETH_GW" dev eth0 2>/dev/null || true
